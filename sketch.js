@@ -1,6 +1,11 @@
 let capture;
 let faceMesh;
+let handPose;
 let faces = [];
+let hands = [];
+let earringStyle = 0; // 目前耳環樣式
+let lastHandX = 0;    // 紀錄上次手部 X 位置
+let lastSwitchTime = 0; // 紀錄上次切換樣式的時間
 
 function setup() {
   // 建立一個全螢幕的畫布
@@ -12,10 +17,19 @@ function setup() {
   capture.hide();
 
   // 初始化 ml5 faceMesh 模型
-  faceMesh = ml5.faceMesh(capture, { maxFaces: 1, refineLandmarks: false, flipHorizontal: false });
-  // 開始偵測臉部，並將結果存入 faces 變數
-  faceMesh.detectStart(capture, (results) => {
-    faces = results;
+  faceMesh = ml5.faceMesh(capture, { maxFaces: 1, refineLandmarks: false, flipHorizontal: false }, () => {
+    // 確保模型載入完成後才開始偵測
+    faceMesh.detectStart(capture, (results) => {
+      faces = results;
+    });
+  });
+
+  // 初始化 ml5 handPose 模型
+  handPose = ml5.handPose(capture, { flipHorizontal: false }, () => {
+    // 確保手部模型載入完成後才開始偵測
+    handPose.detectStart(capture, (results) => {
+      hands = results;
+    });
   });
 }
 
@@ -32,6 +46,18 @@ function draw() {
   textSize(24);
   textAlign(CENTER, BOTTOM);
   text("414730092許詠鈐", width / 2, height / 2 - videoH / 2 - 10);
+
+  // 偵測揮手動作切換樣式
+  if (hands.length > 0) {
+    let hand = hands[0].keypoints[9]; // 使用掌心關鍵點
+    let dx = abs(hand.x - lastHandX); // 計算水平位移
+    // 如果移動速度夠快 (dx > 30) 且距離上次切換超過 500 毫秒
+    if (dx > 30 && millis() - lastSwitchTime > 500) {
+      earringStyle = (earringStyle + 1) % 3; // 在 3 種樣式間切換
+      lastSwitchTime = millis();
+    }
+    lastHandX = hand.x;
+  }
 
   push();
   translate(width / 2, height / 2); // 移動到中心
@@ -52,7 +78,7 @@ function draw() {
     // 繪製左右兩邊的耳環
     [leftLobe, rightLobe].forEach(pt => {
       if (pt) {
-        drawEarring((pt.x - capture.width / 2) * scX, (pt.y - capture.height / 2) * scY);
+        drawEarring((pt.x - capture.width / 2) * scX, (pt.y - capture.height / 2) * scY, earringStyle);
       }
     });
   }
@@ -63,11 +89,24 @@ function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
 
-// 繪製三個垂直排列的黃色圓圈
-function drawEarring(x, y) {
-  fill('yellow');
+// 繪製不同樣式的耳環
+function drawEarring(x, y, style) {
   noStroke();
-  for (let i = 0; i < 3; i++) {
-    circle(x, y + (i * 15), 10); // 每個圓圈間隔 15 像素
+  if (style === 0) {
+    // 樣式 0: 三個黃色圓圈 (經典款)
+    fill('yellow');
+    for (let i = 0; i < 3; i++) {
+      circle(x, y + (i * 15), 10);
+    }
+  } else if (style === 1) {
+    // 樣式 1: 桃紅色大圓珠 (簡約款)
+    fill('#ff00ff');
+    circle(x, y + 15, 20);
+    fill(255, 150);
+    circle(x - 4, y + 10, 6); // 增加一點反光感
+  } else if (style === 2) {
+    // 樣式 2: 青色三角形 (幾何款)
+    fill('#00ffff');
+    triangle(x, y, x - 10, y + 25, x + 10, y + 25);
   }
 }
